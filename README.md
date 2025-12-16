@@ -12,12 +12,13 @@ Beszel Mobile brings your server metrics to your pocket. Connect to your existin
 ---
 
 ## What's New
+- **📶 Offline Mode**: Gracefully handles network loss with a dedicated "No Connection" screen and easy retry mechanic.
+- **🐧 OS Recognition**: Automatically detects and displays icons for **Windows** and **Linux** systems.
+- **🔔 Notification Center**: 
+    - **Badge Indicator**: See at a glance if you have active alerts directly from the AppBar.
+    - **Smart Suppression**: Prevents spam by silencing duplicate alerts until you clear the existing ones.
 - **🔐 PIN Security**: Secure your app with a 4-digit PIN code. Supports Setup, Verification, and automatic cleanup on logout.
 - **🔄 Custom Pull-to-Refresh**: Smooth, animated dashboard refreshing with a custom spinning icon.
-- **⚡ Enhanced Alerts**: 
-    - **Uniform 80% Threshold**: Immediate alerts if CPU, RAM, or Disk usage exceeds 80%.
-    - **Startup Checks**: Instantly checks system health upon app launch—no more waiting for changes to trigger alerts.
-    - **Safe-Start**: Optimized initialization ensures the app launches instantly, even with heavy data loads.
 
 ---
 
@@ -25,6 +26,7 @@ Beszel Mobile brings your server metrics to your pocket. Connect to your existin
 
 ### 📊 Real-Time Dashboard
 - Live updates of all your connected systems.
+- **OS Icons**: Visual distinction between Windows and Linux servers.
 - **Status Indicators**: Instant visual feedback on system health (Green/Red).
 - **Sorting**: Sort systems by Name, CPU, RAM, or Disk usage.
 - **Pull-to-Refresh**: Manually refresh data with a fluid, custom animation.
@@ -35,11 +37,13 @@ Beszel Mobile brings your server metrics to your pocket. Connect to your existin
 - **Dynamic Scaling**: Charts adapt automatically to your data range.
 
 ### 🔔 Smart Alerts System
+- **Notification Bell**: Dedicated icon with a **Red Badge** for unread alerts.
 - **Immediate Notifications**: Get notified instantly on your device if:
     - A server goes **DOWN**.
     - **CPU**, **RAM**, or **Disk** usage exceeds **80%**.
 - **Startup Protection**: Detects overloaded servers immediately when you open the app.
-- **Alert History**: Persistent log of all past critical events (capped for performance).
+- **Smart Logic**: Suppresses repetitive alerts while the issue remains unacknowledged.
+- **Alert History**: Persistent log of all past critical events.
 
 ### 🌍 Localization & Customization
 - **Multi-language**: Fully localized in **English** 🇺🇸 and **Russian** 🇷🇺.

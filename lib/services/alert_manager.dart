@@ -1,9 +1,10 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:beszel_pro/models/alert.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
-class AlertManager {
+class AlertManager extends ChangeNotifier {
   static final AlertManager _instance = AlertManager._internal();
 
   factory AlertManager() {
@@ -33,6 +34,7 @@ class AlertManager {
       // Sort just in case, though insertion order should be preserved
       loaded.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       _alerts = loaded; 
+      notifyListeners();
     }
   }
 
@@ -51,6 +53,7 @@ class AlertManager {
       _alerts = _alerts.sublist(0, 50);
     }
     await _saveAlerts();
+    notifyListeners();
   }
 
   Future<void> _saveAlerts() async {
@@ -65,5 +68,6 @@ class AlertManager {
     _alerts.clear();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('local_alerts');
+    notifyListeners();
   }
 }

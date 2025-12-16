@@ -23,6 +23,7 @@
   "failed_connect": "Failed to connect: {}",
   "url_incorrect": "URL incorrect",
   "logout": "Logout",
+  "no_internet": "No internet connection",
   "alert_system_down_title": "System Down",
   "alert_system_down_body": "{} is unreachable!",
   "alert_high_cpu_title": "High CPU Usage",

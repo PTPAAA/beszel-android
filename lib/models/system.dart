@@ -9,6 +9,7 @@ class System {
   final double memoryPercent;
   final double diskPercent;
   final String updated;
+  final String? os;
 
   System({
     required this.id,
@@ -19,6 +20,7 @@ class System {
     required this.memoryPercent,
     required this.diskPercent,
     required this.updated,
+    this.os,
   });
 
   factory System.fromRecord(RecordModel record) {
@@ -41,6 +43,7 @@ class System {
       memoryPercent: toDouble(info['mp']),
       diskPercent: toDouble(info['dp']),
       updated: record.updated,
+      os: info['k'] as String?,
     );
   }
 }

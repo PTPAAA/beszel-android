@@ -30,6 +30,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   List<System> _systems = [];
   bool _isLoading = true;
+  bool _isOffline = false;
   String? _error;
   SortOption _currentSort = SortOption.name; // Default sort
   Timer? _pollingTimer;
@@ -97,6 +98,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _checkAlerts(System oldSystem, System newSystem) {
+      if (Provider.of<AlertManager>(context, listen: false).alerts.isNotEmpty) return;
       // 1. Check for DOWN status
       if (oldSystem.status == 'up' && newSystem.status == 'down') {
         _triggerAlert(newSystem, tr('alert_system_down_title'), tr('alert_system_down_body', args: [newSystem.name]), 'error');
@@ -116,6 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _checkInitialAlerts() {
+    if (Provider.of<AlertManager>(context, listen: false).alerts.isNotEmpty) return;
     for (final system in _systems) {
       // 1. Check for DOWN status
       if (system.status == 'down') {
@@ -144,6 +147,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _fetchSystems() async {
+    if (mounted) {
+      setState(() {
+        _isOffline = false;
+        _error = null;
+      });
+    }
+
     try {
       final pb = PocketBaseService().pb;
       final records = await pb.collection('systems').getFullList(
@@ -164,12 +174,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final errString = e.toString();
+        debugPrint('Fetch error: $errString');
         setState(() {
-          _error = 'Failed to load systems: $e';
+          if (errString.contains('ClientException') || 
+              errString.contains('SocketException') || 
+              errString.contains('Failed host lookup')) {
+            _isOffline = true;
+          } else {
+             _error = 'Failed to load systems: $e';
+          }
           _isLoading = false;
         });
       }
     }
+  }
+
+  Widget _buildOfflineWidget() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.signal_wifi_off, size: 64, color: Colors.grey),
+          const SizedBox(height: 16),
+          Text(
+            tr('no_internet'),
+            style: const TextStyle(fontSize: 18, color: Colors.grey),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () {
+              setState(() {
+                _isLoading = true;
+                _isOffline = false;
+                _error = null;
+              });
+              _fetchSystems();
+            },
+            icon: const Icon(Icons.refresh),
+            label: Text(tr('refresh') ?? 'Refresh'), // Fallback if 'refresh' key missing, though ideally add to en.json too or use Icon button
+          ),
+        ],
+      ),
+    );
   }
 
 
@@ -317,6 +364,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                );
             }
           ),
+          Consumer<AlertManager>(
+            builder: (context, alertManager, child) {
+              return IconButton(
+                icon: Badge(
+                  isLabelVisible: alertManager.alerts.isNotEmpty,
+                  smallSize: 10,
+                  child: const Icon(Icons.notifications),
+                ),
+                tooltip: 'Alerts',
+                onPressed: () {
+                   Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const AlertsScreen()),
+                  );
+                },
+              );
+            },
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.account_circle),
             tooltip: 'User Menu',
@@ -358,13 +422,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     },
                   );
                   break;
-                case 'logout':
                   _logout();
-                  break;
-                case 'alerts':
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const AlertsScreen()),
-                  );
                   break;
               }
             },
@@ -374,14 +432,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: ListTile(
                   leading: Icon(Icons.person),
                   title: Text('User'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-              const PopupMenuItem<String>(
-                value: 'alerts',
-                child: ListTile(
-                  leading: Icon(Icons.notifications),
-                  title: Text('Alerts'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -419,7 +469,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _error != null
+          : _isOffline
+            ? _buildOfflineWidget()
+            : _error != null
               ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
               : CustomRefreshIndicator(
                   onRefresh: _fetchSystems,
@@ -481,6 +533,14 @@ class _SystemCard extends StatelessWidget {
     return Colors.red;
   }
 
+  Widget _getOsIcon(String? os) {
+    if (os != null && os.toLowerCase().contains('windows')) {
+      return Image.asset('assets/windows.png', height: 18, width: 18);
+    }
+    // Default to Linux icon for all others (including null) as requested
+    return Image.asset('assets/linux.png', height: 18, width: 18);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -502,6 +562,8 @@ class _SystemCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  _getOsIcon(system.os),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       system.name,

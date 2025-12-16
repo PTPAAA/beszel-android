@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:beszel_pro/services/pin_service.dart';
 import 'package:beszel_pro/screens/pin_screen.dart';
+import 'package:beszel_pro/services/alert_manager.dart';
 
 
 void main() async {
@@ -23,6 +24,7 @@ void main() async {
       child: MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => AppProvider()),
+          ChangeNotifierProvider(create: (_) => AlertManager()),
         ],
         child: const MyApp(),
       ),
