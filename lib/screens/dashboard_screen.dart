@@ -28,6 +28,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   List<System> _systems = [];
+  Map<String, List<int>> _cumulativeTraffic = {}; // systemId -> [sent, recv]
   bool _isLoading = true;
   bool _isOffline = false;
   String? _error;
@@ -232,6 +233,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _checkInitialAlerts();
           _isLoading = false;
         });
+
+        // Fetch cumulative traffic for each system (in background)
+        _fetchCumulativeTraffic();
       }
     } catch (e) {
       if (mounted) {
@@ -248,6 +252,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _fetchCumulativeTraffic() async {
+    // Fetch cumulative traffic for each system from system_stats collection
+    // Cumulative data is in stats['ni'] (NetworkInterfaces) as:
+    // { "eth0": [upDelta, downDelta, totalBytesSent, totalBytesRecv], ... }
+    try {
+      final pb = PocketBaseService().pb;
+      final Map<String, List<int>> trafficMap = {};
+
+      for (final system in _systems) {
+        try {
+          // Get the latest stats record for this system
+          final statsRecords = await pb
+              .collection('system_stats')
+              .getList(
+                page: 1,
+                perPage: 1,
+                filter: 'system = "${system.id}"',
+                sort: '-created',
+              );
+
+          if (statsRecords.items.isNotEmpty) {
+            final stats = statsRecords.items.first.data['stats'];
+            if (stats != null && stats['ni'] != null) {
+              // ni = NetworkInterfaces map
+              // Each interface: [upDelta, downDelta, totalBytesSent, totalBytesRecv]
+              final ni = stats['ni'];
+              if (ni is Map) {
+                int totalSent = 0;
+                int totalRecv = 0;
+                ni.forEach((key, value) {
+                  if (value is List && value.length >= 4) {
+                    totalSent += ((value[2] is num)
+                        ? (value[2] as num).toInt()
+                        : 0);
+                    totalRecv += ((value[3] is num)
+                        ? (value[3] as num).toInt()
+                        : 0);
+                  }
+                });
+                trafficMap[system.id] = [totalSent, totalRecv];
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('Failed to fetch stats for ${system.name}: $e');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _cumulativeTraffic = trafficMap;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch cumulative traffic: $e');
     }
   }
 
@@ -586,7 +648,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   final isDetailed = Provider.of<AppProvider>(
                     context,
                   ).isDetailed;
-                  return _SystemCard(system: system, isDetailed: isDetailed);
+                  final traffic = _cumulativeTraffic[system.id];
+                  return _SystemCard(
+                    system: system,
+                    isDetailed: isDetailed,
+                    cumulativeTraffic: traffic,
+                  );
                 },
               ),
             ),
@@ -597,8 +664,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 class _SystemCard extends StatelessWidget {
   final System system;
   final bool isDetailed;
+  final List<int>? cumulativeTraffic; // [sent, recv]
 
-  const _SystemCard({required this.system, this.isDetailed = false});
+  const _SystemCard({
+    required this.system,
+    this.isDetailed = false,
+    this.cumulativeTraffic,
+  });
 
   String _formatBytes(double bytes) {
     if (bytes <= 0) return '0 B';
@@ -632,39 +704,43 @@ class _SystemCard extends StatelessWidget {
   }
 
   Widget _buildDetailedCard(BuildContext context) {
-    // Keys identified from user debug:
-    // la: Load Average [1m, 5m, 15m]
-    // sv: Services [running, failed] -> e.g. [43, 0]
-    // b:  Bandwidth (Net I/O) in bytes/s
-    // bb: Total Bytes
+    // Keys from Beszel source (internal/entities/system/system.go):
+    // Info struct (stored in 'systems' collection):
+    //   la: LoadAvg [1m, 5m, 15m] (array of 3 floats)
+    //   sv: Services [total, failed] (array of 2 ints)
+    //   b:  Bandwidth (float64, combined rate in bytes/s)
+    //   bb: BandwidthBytes (uint64, cumulative TOTAL = sent + recv combined)
+    //
+    // Stats struct (stored in 'system_stats' collection):
+    //   b: Bandwidth ([2]uint64 = [sent bytes, recv bytes] cumulative)
+    //   ns/nr: NetworkSent/NetworkRecv (real-time rate, bytes/s)
 
     String load = '0.00 0.00 0.00';
     String network = '0 B/s';
     String services = '0';
-    String totalTraffic = '0 B';
+    String totalTraffic = '加载中...'; // Loading...
 
     try {
-      // Load Average
+      // Load Average (la: [3]float64)
       if (system.info['la'] != null) {
         final l = system.info['la'];
         if (l is List) {
-          load = l.join(' ');
+          load = l
+              .map((v) => (v is num) ? v.toStringAsFixed(2) : v.toString())
+              .join(' ');
         } else {
           load = l.toString();
         }
       }
 
-      // Bandwidth (Net)
-      if (system.info['b'] != null) {
-        final b = system.info['b'];
-        if (b is num) {
-          network = _formatBytes(b.toDouble()) + '/s';
-        } else {
-          network = b.toString();
-        }
+      // Real-time Network Speed (bb: combined bytes/s rate)
+      // Note: info['b'] is not set by agent, so we use 'bb' which is bytesSentPerSec + bytesRecvPerSec
+      if (system.info['bb'] != null && system.info['bb'] is num) {
+        final bb = (system.info['bb'] as num).toDouble();
+        network = _formatBytes(bb) + '/s';
       }
 
-      // Services
+      // Services (sv: [total, failed])
       if (system.info['sv'] != null) {
         final sv = system.info['sv'];
         if (sv is List && sv.length >= 1) {
@@ -676,11 +752,18 @@ class _SystemCard extends StatelessWidget {
         }
       }
 
-      // Total Traffic (assuming 'bb' is Total Bytes)
-      if (system.info['bb'] != null) {
-        final bb = system.info['bb'];
-        if (bb is num) {
-          totalTraffic = _formatBytes(bb.toDouble());
+      // Total Traffic (from system_stats via cumulativeTraffic)
+      // cumulativeTraffic = [sent, recv] from Stats.b
+      if (cumulativeTraffic != null && cumulativeTraffic!.length >= 2) {
+        final sent = cumulativeTraffic![0];
+        final recv = cumulativeTraffic![1];
+        totalTraffic =
+            '↑${_formatBytes(sent.toDouble())} / ↓${_formatBytes(recv.toDouble())}';
+      } else {
+        // Fallback: use bb (combined total) if cumulativeTraffic not loaded yet
+        if (system.info['bb'] != null && system.info['bb'] is num) {
+          final bb = (system.info['bb'] as num).toDouble();
+          totalTraffic = '总计: ${_formatBytes(bb)}';
         }
       }
     } catch (_) {}
@@ -693,6 +776,40 @@ class _SystemCard extends StatelessWidget {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => SystemDetailScreen(system: system),
+            ),
+          );
+        },
+        onLongPress: () {
+          // Debug: show raw data
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: Text('Debug: ${system.name}'),
+              content: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      '=== info ===',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SelectableText(system.info.toString()),
+                    const SizedBox(height: 16),
+                    const Text(
+                      '=== cumulativeTraffic ===',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SelectableText(cumulativeTraffic?.toString() ?? 'null'),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ],
             ),
           );
         },
