@@ -1,7 +1,5 @@
 import 'package:beszel_pro/models/system.dart';
 import 'dart:async';
-import 'dart:math' as math;
-import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
 import 'package:beszel_pro/screens/system_detail_screen.dart';
 import 'package:beszel_pro/services/pocketbase_service.dart';
 import 'package:flutter/material.dart';
@@ -57,7 +55,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     debugPrint('Dashboard: initState');
-    
+
     // Defer heavy services until after the first frame rendered
     WidgetsBinding.instance.addPostFrameCallback((_) {
       debugPrint('Dashboard: PostFrameCallback - Starting Services');
@@ -65,7 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       AlertManager().loadAlerts();
       _fetchSystems();
       _subscribeToRealtime();
-      
+
       // Polling fallback: every 5 seconds
       _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
         _pollSystems();
@@ -77,20 +75,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Silent fetch
     try {
       final pb = PocketBaseService().pb;
-      final records = await pb.collection('systems').getFullList(sort: '-updated');
+      final records = await pb
+          .collection('systems')
+          .getFullList(sort: '-updated');
       if (!mounted) return;
-      
+
       final newSystems = records.map((r) => System.fromRecord(r)).toList();
       setState(() {
         for (var newSys in newSystems) {
-           final index = _systems.indexWhere((s) => s.id == newSys.id);
-           if (index != -1) {
-             final oldSys = _systems[index];
-             _checkAlerts(oldSys, newSys);
-             _systems[index] = newSys;
-           } else {
-             _systems.add(newSys);
-           }
+          final index = _systems.indexWhere((s) => s.id == newSys.id);
+          if (index != -1) {
+            final oldSys = _systems[index];
+            _checkAlerts(oldSys, newSys);
+            _systems[index] = newSys;
+          } else {
+            _systems.add(newSys);
+          }
         }
         _sortSystems();
       });
@@ -98,43 +98,103 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _checkAlerts(System oldSystem, System newSystem) {
-      if (Provider.of<AlertManager>(context, listen: false).alerts.isNotEmpty) return;
-      // 1. Check for DOWN status
-      if (oldSystem.status == 'up' && newSystem.status == 'down') {
-        _triggerAlert(newSystem, tr('alert_system_down_title'), tr('alert_system_down_body', args: [newSystem.name]), 'error');
-      }
-      // 2. Check for High CPU (80%)
-      if (newSystem.cpuPercent > 80 && oldSystem.cpuPercent <= 80) {
-          _triggerAlert(newSystem, tr('alert_high_cpu_title'), tr('alert_high_cpu_body', args: [newSystem.name, newSystem.cpuPercent.toStringAsFixed(1)]), 'warning');
-      }
-      // 3. Check for High RAM (80%)
-      if (newSystem.memoryPercent > 80 && oldSystem.memoryPercent <= 80) {
-          _triggerAlert(newSystem, tr('alert_high_ram_title'), tr('alert_high_ram_body', args: [newSystem.name, newSystem.memoryPercent.toStringAsFixed(1)]), 'warning');
-      }
-      // 4. Check for High Disk (80%)
-      if (newSystem.diskPercent > 80 && oldSystem.diskPercent <= 80) {
-          _triggerAlert(newSystem, tr('alert_high_disk_title'), tr('alert_high_disk_body', args: [newSystem.name, newSystem.diskPercent.toStringAsFixed(1)]), 'warning');
-      }
+    if (Provider.of<AlertManager>(context, listen: false).alerts.isNotEmpty)
+      return;
+    // 1. Check for DOWN status
+    if (oldSystem.status == 'up' && newSystem.status == 'down') {
+      _triggerAlert(
+        newSystem,
+        tr('alert_system_down_title'),
+        tr('alert_system_down_body', args: [newSystem.name]),
+        'error',
+      );
+    }
+    // 2. Check for High CPU (80%)
+    if (newSystem.cpuPercent > 80 && oldSystem.cpuPercent <= 80) {
+      _triggerAlert(
+        newSystem,
+        tr('alert_high_cpu_title'),
+        tr(
+          'alert_high_cpu_body',
+          args: [newSystem.name, newSystem.cpuPercent.toStringAsFixed(1)],
+        ),
+        'warning',
+      );
+    }
+    // 3. Check for High RAM (80%)
+    if (newSystem.memoryPercent > 80 && oldSystem.memoryPercent <= 80) {
+      _triggerAlert(
+        newSystem,
+        tr('alert_high_ram_title'),
+        tr(
+          'alert_high_ram_body',
+          args: [newSystem.name, newSystem.memoryPercent.toStringAsFixed(1)],
+        ),
+        'warning',
+      );
+    }
+    // 4. Check for High Disk (80%)
+    if (newSystem.diskPercent > 80 && oldSystem.diskPercent <= 80) {
+      _triggerAlert(
+        newSystem,
+        tr('alert_high_disk_title'),
+        tr(
+          'alert_high_disk_body',
+          args: [newSystem.name, newSystem.diskPercent.toStringAsFixed(1)],
+        ),
+        'warning',
+      );
+    }
   }
 
   void _checkInitialAlerts() {
-    if (Provider.of<AlertManager>(context, listen: false).alerts.isNotEmpty) return;
+    if (Provider.of<AlertManager>(context, listen: false).alerts.isNotEmpty)
+      return;
     for (final system in _systems) {
       // 1. Check for DOWN status
       if (system.status == 'down') {
-         _triggerAlert(system, tr('alert_system_down_title'), tr('alert_system_down_body', args: [system.name]), 'error');
+        _triggerAlert(
+          system,
+          tr('alert_system_down_title'),
+          tr('alert_system_down_body', args: [system.name]),
+          'error',
+        );
       }
       // 2. Check for High CPU (80%)
       if (system.cpuPercent > 80) {
-          _triggerAlert(system, tr('alert_high_cpu_title'), tr('alert_high_cpu_body', args: [system.name, system.cpuPercent.toStringAsFixed(1)]), 'warning');
+        _triggerAlert(
+          system,
+          tr('alert_high_cpu_title'),
+          tr(
+            'alert_high_cpu_body',
+            args: [system.name, system.cpuPercent.toStringAsFixed(1)],
+          ),
+          'warning',
+        );
       }
       // 3. Check for High RAM (80%)
       if (system.memoryPercent > 80) {
-          _triggerAlert(system, tr('alert_high_ram_title'), tr('alert_high_ram_body', args: [system.name, system.memoryPercent.toStringAsFixed(1)]), 'warning');
+        _triggerAlert(
+          system,
+          tr('alert_high_ram_title'),
+          tr(
+            'alert_high_ram_body',
+            args: [system.name, system.memoryPercent.toStringAsFixed(1)],
+          ),
+          'warning',
+        );
       }
       // 4. Check for High Disk (80%)
       if (system.diskPercent > 80) {
-          _triggerAlert(system, tr('alert_high_disk_title'), tr('alert_high_disk_body', args: [system.name, system.diskPercent.toStringAsFixed(1)]), 'warning');
+        _triggerAlert(
+          system,
+          tr('alert_high_disk_title'),
+          tr(
+            'alert_high_disk_body',
+            args: [system.name, system.diskPercent.toStringAsFixed(1)],
+          ),
+          'warning',
+        );
       }
     }
   }
@@ -156,9 +216,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       final pb = PocketBaseService().pb;
-      final records = await pb.collection('systems').getFullList(
-            sort: '-updated',
-          );
+      final records = await pb
+          .collection('systems')
+          .getFullList(sort: '-updated');
 
       if (records.isNotEmpty) {
         debugPrint('SYSTEM RECORD RAW DATA: ${records.first.data}');
@@ -177,12 +237,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final errString = e.toString();
         debugPrint('Fetch error: $errString');
         setState(() {
-          if (errString.contains('ClientException') || 
-              errString.contains('SocketException') || 
+          if (errString.contains('ClientException') ||
+              errString.contains('SocketException') ||
               errString.contains('Failed host lookup')) {
             _isOffline = true;
           } else {
-             _error = 'Failed to load systems: $e';
+            _error = 'Failed to load systems: $e';
           }
           _isLoading = false;
         });
@@ -212,16 +272,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _fetchSystems();
             },
             icon: const Icon(Icons.refresh),
-            label: Text(tr('refresh') ?? 'Refresh'), // Fallback if 'refresh' key missing, though ideally add to en.json too or use Icon button
+            label: Text(
+              tr('refresh') ?? 'Refresh',
+            ), // Fallback if 'refresh' key missing, though ideally add to en.json too or use Icon button
           ),
         ],
       ),
     );
   }
 
-
-
-  // ... 
+  // ...
 
   Future<void> _subscribeToRealtime() async {
     try {
@@ -236,8 +296,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         } else if (e.action == 'update') {
           debugPrint('REALTIME EVENT: ${e.record!.data}');
           final updatedSystem = System.fromRecord(e.record!);
-          debugPrint('UPDATED STATS: CPU=${updatedSystem.cpuPercent}, RAM=${updatedSystem.memoryPercent}');
-          
+          debugPrint(
+            'UPDATED STATS: CPU=${updatedSystem.cpuPercent}, RAM=${updatedSystem.memoryPercent}',
+          );
+
           setState(() {
             final index = _systems.indexWhere((s) => s.id == e.record!.id);
             if (index != -1) {
@@ -247,7 +309,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _sortSystems();
             }
           });
-
         } else if (e.action == 'delete') {
           setState(() {
             _systems.removeWhere((s) => s.id == e.record!.id);
@@ -262,11 +323,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _triggerAlert(System system, String title, String body, String type) {
     // Show local notification
     NotificationService().showNotification(
-      id: system.id.hashCode, 
-      title: title, 
-      body: body
+      id: system.id.hashCode,
+      title: title,
+      body: body,
     );
-    
+
     // Save to history
     AlertManager().addAlert(title, body, type, system.name);
   }
@@ -281,7 +342,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _logout() async {
     final pb = PocketBaseService().pb;
     pb.authStore.clear();
-    
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('pb_url');
     await PinService().removePin();
@@ -304,65 +365,75 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: const Icon(Icons.sort),
             tooltip: 'Sort by',
             onPressed: () {
-               showModalBottomSheet(
+              showModalBottomSheet(
                 context: context,
                 builder: (context) {
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                       ListTile(
-                         leading: const Icon(Icons.sort_by_alpha),
-                         title: Text(tr('sort_name')),
-                         trailing: _currentSort == SortOption.name ? const Icon(Icons.check) : null,
-                         onTap: () {
-                           setState(() {
-                             _currentSort = SortOption.name;
-                             _sortSystems();
-                           });
-                           Navigator.pop(context);
-                         },
-                       ),
-                       ListTile(
-                         leading: const Icon(Icons.memory),
-                         title: Text(tr('sort_cpu')),
-                         trailing: _currentSort == SortOption.cpu ? const Icon(Icons.check) : null,
-                         onTap: () {
-                           setState(() {
-                             _currentSort = SortOption.cpu;
-                             _sortSystems();
-                           });
-                           Navigator.pop(context);
-                         },
-                       ),
-                       ListTile(
-                         leading: const Icon(Icons.storage),
-                         title: Text(tr('sort_ram')),
-                         trailing: _currentSort == SortOption.ram ? const Icon(Icons.check) : null,
-                         onTap: () {
-                           setState(() {
-                             _currentSort = SortOption.ram;
-                             _sortSystems();
-                           });
-                           Navigator.pop(context);
-                         },
-                       ),
-                       ListTile(
-                         leading: const Icon(Icons.donut_large),
-                         title: Text(tr('disk')), // reused translation or key 'disk'
-                         trailing: _currentSort == SortOption.disk ? const Icon(Icons.check) : null,
-                         onTap: () {
-                           setState(() {
-                             _currentSort = SortOption.disk;
-                             _sortSystems();
-                           });
-                           Navigator.pop(context);
-                         },
-                       ),
+                      ListTile(
+                        leading: const Icon(Icons.sort_by_alpha),
+                        title: Text(tr('sort_name')),
+                        trailing: _currentSort == SortOption.name
+                            ? const Icon(Icons.check)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            _currentSort = SortOption.name;
+                            _sortSystems();
+                          });
+                          Navigator.pop(context);
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.memory),
+                        title: Text(tr('sort_cpu')),
+                        trailing: _currentSort == SortOption.cpu
+                            ? const Icon(Icons.check)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            _currentSort = SortOption.cpu;
+                            _sortSystems();
+                          });
+                          Navigator.pop(context);
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.storage),
+                        title: Text(tr('sort_ram')),
+                        trailing: _currentSort == SortOption.ram
+                            ? const Icon(Icons.check)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            _currentSort = SortOption.ram;
+                            _sortSystems();
+                          });
+                          Navigator.pop(context);
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.donut_large),
+                        title: Text(
+                          tr('disk'),
+                        ), // reused translation or key 'disk'
+                        trailing: _currentSort == SortOption.disk
+                            ? const Icon(Icons.check)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            _currentSort = SortOption.disk;
+                            _sortSystems();
+                          });
+                          Navigator.pop(context);
+                        },
+                      ),
                     ],
                   );
                 },
-               );
-            }
+              );
+            },
           ),
           Consumer<AlertManager>(
             builder: (context, alertManager, child) {
@@ -374,7 +445,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 tooltip: 'Alerts',
                 onPressed: () {
-                   Navigator.of(context).push(
+                  Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const AlertsScreen()),
                   );
                 },
@@ -392,7 +463,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   );
                   break;
                 case 'theme':
-                  final provider = Provider.of<AppProvider>(context, listen: false);
+                  final provider = Provider.of<AppProvider>(
+                    context,
+                    listen: false,
+                  );
                   provider.toggleTheme(provider.themeMode != ThemeMode.dark);
                   break;
                 case 'language':
@@ -417,11 +491,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             },
                             child: const Text('🇷🇺 Русский'),
                           ),
+                          SimpleDialogOption(
+                            onPressed: () {
+                              context.setLocale(const Locale('zh', 'CN'));
+                              Navigator.pop(context);
+                            },
+                            child: const Text('🇨🇳 简体中文'),
+                          ),
                         ],
                       );
                     },
                   );
                   break;
+                case 'logout':
                   _logout();
                   break;
               }
@@ -439,7 +521,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 value: 'theme',
                 child: ListTile(
                   leading: Icon(
-                    Provider.of<AppProvider>(context, listen: false).themeMode == ThemeMode.dark
+                    Provider.of<AppProvider>(
+                              context,
+                              listen: false,
+                            ).themeMode ==
+                            ThemeMode.dark
                         ? Icons.light_mode
                         : Icons.dark_mode,
                   ),
@@ -470,54 +556,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _isOffline
-            ? _buildOfflineWidget()
-            : _error != null
-              ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
-              : CustomRefreshIndicator(
-                  onRefresh: _fetchSystems,
-                  builder: (context, child, controller) {
-                    return Stack(
-                      children: [
-
-                         // For continuous spin during 'loading' state, we might need a separate animation or rely on the controller behavior if configured.
-                         // Simple approach: Use logic to spin based on controller.
-                         // Better: Use a dedicated SpinningWidget if controller.isLoading.
-                         // For now, simple rotation based on pull is good for "pulling". 
-                         // For "refreshing", we want it to spin.
-                          Positioned(
-                            top: 35.0 * controller.value, // Icon vertical pos
-                            left: 0,
-                            right: 0,
-                             child: controller.isLoading
-                                ?  const _SpinningIcon()
-                                : AnimatedBuilder(
-                                  animation: controller,
-                                  builder: (context, _) => Transform.rotate(
-                                    angle: controller.value * 2 * math.pi,
-                                    child: Opacity(
-                                      opacity: controller.value.clamp(0.0, 1.0),
-                                      child: Image.asset('assets/icon.png', height: 30, width: 30)
-                                    )
-                                  ),
-                                ),
-                          ),
-                        Transform.translate(
-                          offset: Offset(0, 100.0 * controller.value),
-                          child: child,
-                        ),
-                      ],
-                    );
-                  },
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(8.0),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    itemCount: _systems.length,
-                    itemBuilder: (context, index) {
-                      final system = _systems[index];
-                      return _SystemCard(system: system);
-                    },
-                  ),
-                ),
+          ? _buildOfflineWidget()
+          : _error != null
+          ? Center(
+              child: Text(_error!, style: const TextStyle(color: Colors.red)),
+            )
+          : RefreshIndicator(
+              onRefresh: _fetchSystems,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(8.0),
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: _systems.length,
+                itemBuilder: (context, index) {
+                  final system = _systems[index];
+                  return _SystemCard(system: system);
+                },
+              ),
+            ),
     );
   }
 }
@@ -575,15 +630,22 @@ class _SystemCard extends StatelessWidget {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color: system.status == 'up' ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
+                      color: system.status == 'up'
+                          ? Colors.green.withOpacity(0.2)
+                          : Colors.red.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       system.status.toUpperCase(),
                       style: TextStyle(
-                        color: system.status == 'up' ? Colors.green : Colors.red,
+                        color: system.status == 'up'
+                            ? Colors.green
+                            : Colors.red,
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                       ),
@@ -592,7 +654,10 @@ class _SystemCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(system.host, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+              Text(
+                system.host,
+                style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              ),
               const Divider(height: 24),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -620,40 +685,6 @@ class _SystemCard extends StatelessWidget {
         ),
         Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
       ],
-    );
-  }
-}
-
-class _SpinningIcon extends StatefulWidget {
-  const _SpinningIcon({super.key});
-
-  @override
-  State<_SpinningIcon> createState() => _SpinningIconState();
-}
-
-class _SpinningIconState extends State<_SpinningIcon> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (_, __) => Transform.rotate(
-        angle: _controller.value * 2 * math.pi,
-        child: Image.asset('assets/icon.png', height: 30, width: 30),
-      ),
     );
   }
 }
