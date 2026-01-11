@@ -719,6 +719,7 @@ class _SystemCard extends StatelessWidget {
     String network = '0 B/s';
     String services = '0';
     String totalTraffic = '加载中...'; // Loading...
+    int serviceTotal = 0;
 
     try {
       // Load Average (la: [3]float64)
@@ -741,14 +742,17 @@ class _SystemCard extends StatelessWidget {
       }
 
       // Services (sv: [total, failed])
+      int serviceFailed = 0;
       if (system.info['sv'] != null) {
         final sv = system.info['sv'];
         if (sv is List && sv.length >= 1) {
-          final total = sv[0];
-          final failed = sv.length > 1 ? sv[1] : 0;
-          services = '$total (Fail: $failed)';
-        } else {
-          services = sv.toString();
+          serviceTotal = (sv[0] is num) ? (sv[0] as num).toInt() : 0;
+          serviceFailed = (sv.length > 1 && sv[1] is num)
+              ? (sv[1] as num).toInt()
+              : 0;
+          if (serviceTotal > 0) {
+            services = '$serviceTotal (Fail: $serviceFailed)';
+          }
         }
       }
 
@@ -846,12 +850,15 @@ class _SystemCard extends StatelessWidget {
               _buildInfoRow(Icons.network_check, tr('network'), network),
               const SizedBox(height: 4),
               _buildInfoRow(Icons.data_usage, tr('traffic'), totalTraffic),
-              const SizedBox(height: 4),
-              _buildInfoRow(
-                Icons.miscellaneous_services,
-                tr('services'),
-                services,
-              ),
+              // Only show services row if there are services (non-Docker agent)
+              if (serviceTotal > 0) ...[
+                const SizedBox(height: 4),
+                _buildInfoRow(
+                  Icons.miscellaneous_services,
+                  tr('services'),
+                  services,
+                ),
+              ],
             ],
           ),
         ),
