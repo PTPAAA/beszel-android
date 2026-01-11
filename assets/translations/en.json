@@ -60,5 +60,16 @@
   "load": "Load",
   "network": "Network",
   "services": "Services",
-  "traffic": "Traffic"
+  "traffic": "Traffic",
+  "uptime": "Uptime",
+  "summary": "Summary",
+  "total": "Total",
+  "online": "Online",
+  "offline": "Offline",
+  "bandwidth": "Bandwidth",
+  "cores": "Cores",
+  "threads": "Threads",
+  "seconds": "seconds",
+  "utilization": "utilization",
+  "used": "Used"
 }

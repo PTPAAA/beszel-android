@@ -344,6 +344,143 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // Summary card showing aggregated statistics
+  Widget _buildSummaryCard(BuildContext context) {
+    // Calculate server counts
+    final totalServers = _systems.length;
+    final onlineServers = _systems.where((s) => s.status == 'up').length;
+    final offlineServers = totalServers - onlineServers;
+
+    // Calculate total real-time bandwidth (sum of all info['bb'])
+    double totalBandwidth = 0;
+    for (final sys in _systems) {
+      if (sys.info['bb'] != null && sys.info['bb'] is num) {
+        totalBandwidth += (sys.info['bb'] as num).toDouble();
+      }
+    }
+
+    // Calculate total cumulative traffic (sum of all cumulativeTraffic)
+    int totalSent = 0;
+    int totalRecv = 0;
+    for (final sys in _systems) {
+      final traffic = _cumulativeTraffic[sys.id];
+      if (traffic != null && traffic.length >= 2) {
+        totalSent += traffic[0];
+        totalRecv += traffic[1];
+      }
+    }
+
+    // Format bytes helper (inline version for this widget)
+    String formatBytes(double bytes) {
+      if (bytes <= 0) return '0 B';
+      const suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+      var i = 0;
+      while (bytes >= 1024 && i < suffixes.length - 1) {
+        bytes /= 1024;
+        i++;
+      }
+      return '${bytes.toStringAsFixed(2)} ${suffixes[i]}';
+    }
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      elevation: 2,
+      color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.dns, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(
+                  tr('summary'),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Server counts
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem(
+                  context,
+                  tr('total'),
+                  totalServers.toString(),
+                  Colors.blue,
+                ),
+                _buildStatItem(
+                  context,
+                  tr('online'),
+                  onlineServers.toString(),
+                  Colors.green,
+                ),
+                _buildStatItem(
+                  context,
+                  tr('offline'),
+                  offlineServers.toString(),
+                  Colors.red,
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Divider(),
+            const SizedBox(height: 8),
+            // Network stats
+            Row(
+              children: [
+                const Icon(Icons.network_check, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${tr('bandwidth')}: ${formatBytes(totalBandwidth)}/s',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.data_usage, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${tr('traffic')}: ↑${formatBytes(totalSent.toDouble())} / ↓${formatBytes(totalRecv.toDouble())}',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(
+    BuildContext context,
+    String label,
+    String value,
+    Color color,
+  ) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+
   // ...
 
   Future<void> _subscribeToRealtime() async {
@@ -639,20 +776,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
             )
           : RefreshIndicator(
               onRefresh: _fetchSystems,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8.0),
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: _systems.length,
-                itemBuilder: (context, index) {
-                  final system = _systems[index];
+              child: Builder(
+                builder: (context) {
                   final isDetailed = Provider.of<AppProvider>(
                     context,
                   ).isDetailed;
-                  final traffic = _cumulativeTraffic[system.id];
-                  return _SystemCard(
-                    system: system,
-                    isDetailed: isDetailed,
-                    cumulativeTraffic: traffic,
+                  // In detailed mode, add summary card at index 0
+                  final itemCount = isDetailed
+                      ? _systems.length + 1
+                      : _systems.length;
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(8.0),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: itemCount,
+                    itemBuilder: (context, index) {
+                      // Show summary card at index 0 in detailed mode
+                      if (isDetailed && index == 0) {
+                        return _buildSummaryCard(context);
+                      }
+
+                      // Adjust index for systems list
+                      final sysIndex = isDetailed ? index - 1 : index;
+                      final system = _systems[sysIndex];
+                      final traffic = _cumulativeTraffic[system.id];
+                      return _SystemCard(
+                        system: system,
+                        isDetailed: isDetailed,
+                        cumulativeTraffic: traffic,
+                      );
+                    },
                   );
                 },
               ),
@@ -681,6 +834,16 @@ class _SystemCard extends StatelessWidget {
       i++;
     }
     return '${bytes.toStringAsFixed(2)} ${suffixes[i]}';
+  }
+
+  String _formatUptime(int seconds) {
+    if (seconds <= 0) return '-';
+    final days = seconds ~/ 86400;
+    final hours = (seconds % 86400) ~/ 3600;
+    final mins = (seconds % 3600) ~/ 60;
+    if (days > 0) return '${days}d ${hours}h';
+    if (hours > 0) return '${hours}h ${mins}m';
+    return '${mins}m';
   }
 
   Color _getStatusColor(double usage) {
@@ -772,6 +935,12 @@ class _SystemCard extends StatelessWidget {
       }
     } catch (_) {}
 
+    // Uptime (u: seconds since boot)
+    String uptime = '-';
+    if (system.info['u'] != null && system.info['u'] is num) {
+      uptime = _formatUptime((system.info['u'] as num).toInt());
+    }
+
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
       elevation: 2,
@@ -850,6 +1019,8 @@ class _SystemCard extends StatelessWidget {
               _buildInfoRow(Icons.network_check, tr('network'), network),
               const SizedBox(height: 4),
               _buildInfoRow(Icons.data_usage, tr('traffic'), totalTraffic),
+              const SizedBox(height: 4),
+              _buildInfoRow(Icons.schedule, tr('uptime'), uptime),
               // Only show services row if there are services (non-Docker agent)
               if (serviceTotal > 0) ...[
                 const SizedBox(height: 4),

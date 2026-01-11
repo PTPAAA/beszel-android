@@ -60,5 +60,16 @@
     "load": "负载",
     "network": "网络",
     "services": "服务",
-    "traffic": "总流量"
+    "traffic": "总流量",
+    "uptime": "运行时间",
+    "summary": "汇总",
+    "total": "总计",
+    "online": "在线",
+    "offline": "离线",
+    "bandwidth": "带宽",
+    "cores": "核心数",
+    "threads": "线程数",
+    "seconds": "秒",
+    "utilization": "利用率",
+    "used": "已用"
 }
